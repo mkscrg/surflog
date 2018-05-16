@@ -1,0 +1,22 @@
+{
+  "name": "surflog",
+  "version": "0.0.0",
+  "main": "main.js",
+  "repository": "https://github.com/mkscrg/surflog",
+  "author": "Mike Craig",
+  "license": "MIT",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "local": "( cd dist/; ../node_modules/.bin/functions start && ../node_modules/.bin/functions deploy helloWorld --trigger-http; )",
+    "deploy": "( cd dist; gcloud --project surflog-204303 beta functions deploy helloWorld --trigger-http; )"
+  },
+  "devDependencies": {
+    "@google-cloud/functions-emulator": "^1.0.0-beta.4",
+    "typescript": "^2.8.3",
+    "typescript-formatter": "^7.2.0"
+  },
+  "dependencies": {
+    "@types/express": "^4.11.1"
+  }
+}
