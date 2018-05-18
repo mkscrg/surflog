@@ -1,9 +1,8 @@
 {
   "compilerOptions": {
-    "target": "es5",
-    "module": "commonjs",
-    "outDir": "./dist/",
+    "target": "ESNext",
     "rootDir": "./src/",
+    "module": "CommonJS",
     "downlevelIteration": true,
     "strict": true,
     "noUnusedLocals": true,
