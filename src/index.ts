@@ -48,7 +48,7 @@ const getResource = async (
     return response.json();
 };
 
-// read all resources and write to GCS bucket
+// read all resources, join in a single object, write to GCS bucket
 const fetchResources = async (
     spotName: string,
     spotId: string,
@@ -56,14 +56,16 @@ const fetchResources = async (
     timestamp: Date,
 ): Promise<void> => {
     console.log(`Getting ${resources.join(',')} for ${spotName}`);
+    const results = await Promise.all(resources.map(r => getResource(r, spotId)));
+
     const forecast: {[key:string]: {}} = {};
-    for (let resource of resources) {
-        const data = await getResource(resource, spotId);
-        forecast[resource] = data;
+    for (let i = 0; i < resources.length; ++i) {
+        forecast[resources[i]] = results[i];
     }
 
     const epochTime = Math.floor(timestamp.getTime() / 1000);
     const file = bucket.file(`${spotName}/${epochTime}.json`);
+
     console.log(`Writing forecast for ${spotName} to gs://${bucket.name}/${file.name}`);
     await file.save(JSON.stringify(forecast));
 };
