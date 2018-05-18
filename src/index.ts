@@ -32,39 +32,40 @@ const staticResourceParams = {
     intervalHours: 3,
 }
 
-const fetchResource = async (
+// read a single resource from the Surfline API
+const getResource = async (
     resource: string,
-    spotName: string,
     spotId: string,
-    bucket: Bucket,
-    timestamp: Date,
-): Promise<void> => {
+): Promise<{}> => {
     const params = queryString.stringify({spotId, ...staticResourceParams});
     const resourceUrl = `https://services.surfline.com/kbyg/spots/forecasts/${resource}?${params}`;
 
-    console.log(`Fetching ${resource} for ${spotName} from ${resourceUrl}`);
+    console.log(`GET ${resourceUrl}`);
     const response = await fetch(resourceUrl);
     if (response.status !== 200) {
         throw new Error(`Non-200 response from GET ${resourceUrl}`);
     }
-    const buffer = await response.buffer();
-
-    const epochTime = Math.floor(timestamp.getTime() / 1000);
-    const file = bucket.file(`${spotName}/${epochTime}-${resource}.json`);
-
-    console.log(`Writing ${resource} for ${spotName} to gs://${bucket.name}/${file.name}`);
-    await file.save(buffer);
+    return response.json();
 };
 
-const fetchSpotResources = async (
+// read all resources and write to GCS bucket
+const fetchResources = async (
     spotName: string,
     spotId: string,
     bucket: Bucket,
     timestamp: Date,
 ): Promise<void> => {
+    console.log(`Getting ${resources.join(',')} for ${spotName}`);
+    const forecast: {[key:string]: {}} = {};
     for (let resource of resources) {
-        await fetchResource(resource, spotName, spotId, bucket, timestamp);
+        const data = await getResource(resource, spotId);
+        forecast[resource] = data;
     }
+
+    const epochTime = Math.floor(timestamp.getTime() / 1000);
+    const file = bucket.file(`${spotName}/${epochTime}.json`);
+    console.log(`Writing forecast for ${spotName} to gs://${bucket.name}/${file.name}`);
+    await file.save(JSON.stringify(forecast));
 };
 
 const bucketName = 'surflog-forecasts';
@@ -83,7 +84,7 @@ export const fetchSpot = logErrorAnd500(
         const storage = Storage();
         const bucket = storage.bucket(bucketName);
 
-        await fetchSpotResources(name, id, bucket, now);
+        await fetchResources(name, id, bucket, now);
 
         response.type('text/plain').status(200).send('OK');
     }
