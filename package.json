@@ -29,6 +29,8 @@
   },
   "dependencies": {
     "@google-cloud/storage": "^1.6.0",
+    "@types/luxon": "^0.5.2",
+    "luxon": "^1.2.1",
     "node-fetch": "^2.1.2",
     "query-string": "^6.1.0"
   }

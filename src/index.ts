@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { Bucket } from '@google-cloud/storage';
 import Storage = require('@google-cloud/storage');
+import { DateTime, Duration } from 'luxon';
 import fetch from 'node-fetch';
 import * as queryString from 'query-string';
 
@@ -53,7 +54,7 @@ const fetchResources = async (
     spotName: string,
     spotId: string,
     bucket: Bucket,
-    timestamp: Date,
+    dateTime: DateTime,
 ): Promise<void> => {
     console.log(`Getting ${resources.join(',')} for ${spotName}`);
     const results = await Promise.all(resources.map(r => getResource(r, spotId)));
@@ -63,14 +64,28 @@ const fetchResources = async (
         forecast[resources[i]] = results[i];
     }
 
-    const epochTime = Math.floor(timestamp.getTime() / 1000);
-    const file = bucket.file(`${spotName}/${epochTime}.json`);
+    const timestamp = dateTime.toISO({ suppressSeconds: true, suppressMilliseconds: true });
+    const file = bucket.file(`${spotName}/${timestamp}.json`);
 
     console.log(`Writing forecast for ${spotName} to gs://${bucket.name}/${file.name}`);
     await file.save(JSON.stringify(forecast));
 };
 
 const bucketName = 'surflog-forecasts';
+
+// floor current time to last 5AM/5PM in UTC-8, format as ISO
+const floorTime = (): DateTime => {
+    const now = DateTime.utc();
+    return now.minus(Duration.fromObject({
+        // UTC 13 is UTC-8 5AM, UTC 1 is UTC-8 5PM
+        hours: now.hour >= 13 ? now.hour - 13
+            : now.hour < 1 ? now.hour + 24 - 13
+            : now.hour - 1,
+        minutes: now.minute,
+        seconds: now.second,
+        milliseconds: now.millisecond,
+    }));
+};
 
 export const fetchSpot = logErrorAnd500(
     async (request: Request, response: Response): Promise<void> => {
@@ -81,12 +96,12 @@ export const fetchSpot = logErrorAnd500(
             return;
         }
 
-        const now = new Date();
+        const dateTime = floorTime();
 
         const storage = Storage();
         const bucket = storage.bucket(bucketName);
 
-        await fetchResources(name, id, bucket, now);
+        await fetchResources(name, id, bucket, dateTime);
 
         response.type('text/plain').status(200).send('OK');
     }
