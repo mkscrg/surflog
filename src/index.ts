@@ -74,13 +74,25 @@ const getResource = async (
     return response.json();
 };
 
-// read all resources, join in a single object, write to GCS bucket
+// - read all resources
+// - join resource data in a single object
+// - write to GCS bucket if file does not exist
 const fetchResources = async (
     spotName: string,
     spotId: string,
     bucket: Bucket,
     dateTime: DateTime,
 ): Promise<void> => {
+    const timestamp = dateTime.toISO({ suppressSeconds: true, suppressMilliseconds: true });
+    const file = bucket.file(`${spotName}/${timestamp}.json`);
+
+    console.log(`Checking existence of gs://${bucket.name}/${file.name}`);
+    const [exists] = await file.exists();
+    if (exists) {
+        console.log(`File exists in bucket, stopping`);
+        return;
+    }
+
     console.log(`Getting ${resources.join(',')} for ${spotName}`);
     const results = await Promise.all(resources.map(r => getResource(r, spotId)));
 
@@ -88,9 +100,6 @@ const fetchResources = async (
     for (let i = 0; i < resources.length; ++i) {
         forecast[resources[i]] = results[i];
     }
-
-    const timestamp = dateTime.toISO({ suppressSeconds: true, suppressMilliseconds: true });
-    const file = bucket.file(`${spotName}/${timestamp}.json`);
 
     console.log(`Writing forecast for ${spotName} to gs://${bucket.name}/${file.name}`);
     await file.save(JSON.stringify(forecast));
