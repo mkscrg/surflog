@@ -6,6 +6,8 @@ import fetch from 'node-fetch';
 import * as queryString from 'query-string';
 
 
+// utils
+
 type Handler = (req: Request, res: Response) => Promise<void>;
 
 const logErrorAnd500 = (h: Handler): Handler =>
@@ -19,6 +21,23 @@ const logErrorAnd500 = (h: Handler): Handler =>
     }
 };
 
+// floor current time to last 5AM/5PM in UTC-8, format as ISO
+const floorTime = (
+    dateTime: DateTime,
+    interval: number, // hours
+    offset: number,   // hours
+): DateTime => {
+    const lastInterval = Math.floor((dateTime.hour - offset) / interval) * interval + offset;
+    return dateTime.minus(Duration.fromObject({
+        hours: dateTime.hour - lastInterval,
+        minutes: dateTime.minute,
+        seconds: dateTime.second,
+        milliseconds: dateTime.millisecond,
+    }));
+};
+
+
+// config
 
 const resources = [
     "tides",
@@ -32,6 +51,12 @@ const staticResourceParams = {
     days: 6,
     intervalHours: 3,
 }
+
+const bucketName = 'surflog-forecasts';
+
+const fetchInterval = 12; // fetch forecast every 12 hours
+const fetchOffset = 1; // fetch @ UTC 0100 and 1300
+
 
 // read a single resource from the Surfline API
 const getResource = async (
@@ -71,22 +96,6 @@ const fetchResources = async (
     await file.save(JSON.stringify(forecast));
 };
 
-const bucketName = 'surflog-forecasts';
-
-// floor current time to last 5AM/5PM in UTC-8, format as ISO
-const floorTime = (): DateTime => {
-    const now = DateTime.utc();
-    return now.minus(Duration.fromObject({
-        // UTC 13 is UTC-8 5AM, UTC 1 is UTC-8 5PM
-        hours: now.hour >= 13 ? now.hour - 13
-            : now.hour < 1 ? now.hour + 24 - 13
-            : now.hour - 1,
-        minutes: now.minute,
-        seconds: now.second,
-        milliseconds: now.millisecond,
-    }));
-};
-
 export const fetchSpot = logErrorAnd500(
     async (request: Request, response: Response): Promise<void> => {
         const { name, id } = request.query;
@@ -96,7 +105,7 @@ export const fetchSpot = logErrorAnd500(
             return;
         }
 
-        const dateTime = floorTime();
+        const dateTime = floorTime(DateTime.utc(), fetchInterval, fetchOffset);
 
         const storage = Storage();
         const bucket = storage.bucket(bucketName);
